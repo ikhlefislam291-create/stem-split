@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>فصل الصوت عن اللحن</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef3f2;--ink:#12202b;--mute:#5d6f7a;--card:#fff;--line:#cfdcdc;--acc:#1f7a8c;--accink:#fff;--hi:#f2b134;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a21;--ink:#e8f0f2;--mute:#8fa3ad;--card:#16262f;--line:#27404b;--acc:#4cb5c9;--accink:#0f1a21}}
+:root[data-theme="dark"]{--bg:#0f1a21;--ink:#e8f0f2;--mute:#8fa3ad;--card:#16262f;--line:#27404b;--acc:#4cb5c9;--accink:#0f1a21}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Tajawal,system-ui,sans-serif;line-height:1.7}
+main{max-width:560px;margin:0 auto;padding:28px 18px 48px}
+h1{font-size:30px;font-weight:800;margin:0 0 6px;line-height:1.3}
+p.sub{margin:0 0 22px;color:var(--mute)}
+.drop{position:relative;display:block;border:2px dashed var(--acc);border-radius:14px;padding:34px 16px;text-align:center;cursor:pointer;background:var(--card)}
+.drop:focus-within,.drop:hover{border-style:solid}
+.drop b{display:block;font-size:18px}
+.drop span{color:var(--mute);font-size:14px}
+input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:12px 18px;background:var(--acc);color:var(--accink);cursor:pointer;width:100%;margin-top:14px}
+button:disabled{opacity:.5;cursor:default}
+button.alt{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:14px;display:none}
+.bar i{display:block;height:100%;width:0;background:var(--hi);transition:width .2s}
+#msg{color:var(--mute);font-size:14px;min-height:22px;margin-top:8px}
+.res{display:none;margin-top:22px}
+.track{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.track h2{font-size:17px;margin:0 0 8px}
+audio{width:100%;height:40px}
+.track a{display:block;text-align:center;margin-top:10px;padding:10px;border-radius:10px;background:var(--acc);color:var(--accink);text-decoration:none;font-weight:700}
+.note{font-size:13px;color:var(--mute);margin-top:22px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>افصل الصوت عن اللحن</h1>
+<p class="sub">ارفع فيديو، وحمّل الصوت بدون موسيقى والموسيقى بدون صوت. المعالجة تتم على جهازك.</p>
+
+<label class="drop">
+  <input type="file" id="f" accept="video/*,audio/*">
+  <b id="name">اختر فيديو</b>
+  <span>MP4 أو MOV أو MP3</span>
+</label>
+<button id="go" disabled>افصل الآن</button>
+<div class="bar" id="bar"><i id="fill"></i></div>
+<div id="msg" role="status"></div>
+
+<section class="res" id="res">
+  <div class="track"><h2>الصوت فقط (بدون موسيقى)</h2><audio id="a1" controls></audio><a id="d1" download="voice.wav">تحميل الصوت</a></div>
+  <div class="track"><h2>اللحن فقط (بدون صوت)</h2><audio id="a2" controls></audio><a id="d2" download="music.wav">تحميل اللحن</a></div>
+  <button class="alt" id="again">ملف جديد</button>
+</section>
+
+<p class="note">هذه النسخة التجريبية تفصل الأصوات الموجودة في منتصف الاستريو (الغناء والكلام) عن باقي الصوت. النتيجة جيدة في كثير من الأغاني لكنها ليست مثالية. الفصل الدقيق بالذكاء الاصطناعي يحتاج سيرفر يشغّل نموذج Demucs، وهو الخطوة التالية.</p>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+let file=null;
+$('f').onchange=e=>{file=e.target.files[0]||null;$('name').textContent=file?file.name:'اختر فيديو';$('go').disabled=!file;$('msg').textContent=''};
+$('again').onclick=()=>{$('res').style.display='none';$('f').value='';file=null;$('name').textContent='اختر فيديو';$('go').disabled=true;$('msg').textContent=''};
+
+function setP(p,t){$('bar').style.display='block';$('fill').style.width=p+'%';$('msg').textContent=t}
+const tick=()=>new Promise(r=>setTimeout(r,30));
+
+function wav(chs,rate){
+  const n=chs[0].length,c=chs.length,buf=new ArrayBuffer(44+n*c*2),v=new DataView(buf);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+n*c*2,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);
+  v.setUint16(22,c,true);v.setUint32(24,rate,true);v.setUint32(28,rate*c*2,true);v.setUint16(32,c*2,true);v.setUint16(34,16,true);
+  w(36,'data');v.setUint32(40,n*c*2,true);
+  let o=44;
+  for(let i=0;i<n;i++)for(let k=0;k<c;k++){const s=Math.max(-1,Math.min(1,chs[k][i]));v.setInt16(o,s<0?s*32768:s*32767,true);o+=2}
+  return new Blob([buf],{type:'audio/wav'});
+}
+
+$('go').onclick=async()=>{
+  $('go').disabled=true;$('res').style.display='none';
+  try{
+    setP(10,'جاري قراءة الملف...');await tick();
+    const data=await file.arrayBuffer();
+    setP(30,'جاري استخراج الصوت...');await tick();
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const audio=await ctx.decodeAudioData(data);
+    const L=audio.getChannelData(0),R=audio.numberOfChannels>1?audio.getChannelData(1):L;
+    if(audio.numberOfChannels<2)throw new Error('mono');
+    setP(60,'جاري الفصل...');await tick();
+    const n=L.length,voice=new Float32Array(n),music=new Float32Array(n);
+    for(let i=0;i<n;i++){voice[i]=(L[i]+R[i])/2;music[i]=(L[i]-R[i])/2}
+    let pk=1e-6;for(let i=0;i<n;i+=7)pk=Math.max(pk,Math.abs(music[i]));
+    const g=0.9/pk;for(let i=0;i<n;i++)music[i]*=g;
+    setP(85,'جاري تجهيز الملفات...');await tick();
+    const b1=wav([voice],audio.sampleRate),b2=wav([music,music],audio.sampleRate);
+    const u1=URL.createObjectURL(b1),u2=URL.createObjectURL(b2);
+    $('a1').src=u1;$('d1').href=u1;$('a2').src=u2;$('d2').href=u2;
+    setP(100,'تم.');$('res').style.display='block';
+    ctx.close();
+  }catch(e){
+    $('msg').textContent=e.message==='mono'
+      ?'هذا الملف صوته أحادي (mono)، ولا يمكن فصله بهذه الطريقة. جرّب فيديو بصوت استريو.'
+      :'تعذّر قراءة صوت هذا الملف. جرّب ملف MP4 أو MP3 آخر.';
+    $('bar').style.display='none';
+  }
+  $('go').disabled=false;
+};
+</script>
+</body>
+</html>
